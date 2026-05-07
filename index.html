@@ -787,7 +787,8 @@ function blockToRows(block, header) {
   const motorSide = props.motor_side === 'LEFT' ? '左装' : props.motor_side === 'RIGHT' ? '右装' : '';
 
   // Rotation
-  const rotation = (props.roll_type && props.roll_type.toUpperCase().includes('ROLLBACK')) ? '正转' : '';
+  const _rt = props.roll_type ? props.roll_type.toUpperCase() : '';
+  const rotation = _rt.includes('ROLLBACK') ? '正转' : _rt.includes('ROLLFRONT') ? '反转' : '';
 
   // Fascia → cover
   const fasciaInfo = isWoven ? { cover: '', cover_color: '' } : mapFascia(props.fascia, props.fabric_covered);
