@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF订单 → 生产单转换（Sombra Shades）</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f5f5; --surface: #fff; --border: #e0e0e0; --border-light: #f0f0f0;
+  --text: #1a1a1a; --text-sec: #666; --accent: #1a6ef5; --accent-bg: #e8f0fe;
+  --green: #16a34a; --green-bg: #dcfce7; --amber: #d97706; --amber-bg: #fef3c7;
+  --red: #dc2626; --red-bg: #fef2f2; --header-h: 54px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
+
+/* Header */
+.header { position: sticky; top: 0; z-index: 100; height: var(--header-h); background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; gap: 12px; }
+.header-title { font-weight: 700; font-size: 15px; white-space: nowrap; }
+.header-title em { color: var(--accent); font-style: normal; }
+.header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 0 12px; height: 32px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all .12s; white-space: nowrap; font-family: inherit; }
+.btn:disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #1557d0; }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--bg); }
+.btn-green { background: var(--green); color: #fff; }
+.btn-green:hover { background: #15803d; }
+.btn-red { background: var(--surface); color: var(--red); border-color: #fca5a5; }
+.btn-red:hover { background: var(--red-bg); }
+.btn-sm { height: 26px; padding: 0 8px; font-size: 12px; }
+
+/* Layout */
+.page { max-width: 1700px; margin: 0 auto; padding: 16px 20px; }
+.layout { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
+.sidebar { display: flex; flex-direction: column; gap: 12px; }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.card-head { padding: 10px 14px; border-bottom: 1px solid var(--border-light); font-weight: 600; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card-body { padding: 14px; }
+
+/* Upload */
+.upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 24px 12px; text-align: center; cursor: pointer; transition: all .14s; background: var(--bg); }
+.upload-zone:hover, .upload-zone.over { border-color: var(--accent); background: var(--accent-bg); }
+.upload-zone svg { display: block; margin: 0 auto 8px; }
+.upload-label { font-weight: 600; color: var(--accent); font-size: 13px; }
+.upload-hint { font-size: 11px; color: var(--text-sec); margin-top: 3px; }
+#fileInput { display: none; }
+.progress-wrap { margin-top: 10px; }
+.progress-bar { height: 3px; background: var(--border-light); border-radius: 2px; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s; }
+.progress-label { font-size: 11px; color: var(--text-sec); margin-top: 3px; }
+.file-list { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+.file-item { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid var(--border-light); border-radius: 6px; background: var(--bg); font-size: 12px; }
+.file-item.processing { border-color: #fcd34d; background: var(--amber-bg); }
+.file-item.done { border-color: #86efac; background: var(--green-bg); }
+.file-item.error { border-color: #fca5a5; background: var(--red-bg); }
+.file-badge { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: var(--accent); color: #fff; flex-shrink: 0; }
+.file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-status { font-size: 11px; color: var(--text-sec); flex-shrink: 0; }
+
+/* Form */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.form-full { grid-column: span 2; }
+.form-group { display: flex; flex-direction: column; gap: 3px; }
+.form-label { font-size: 11px; color: var(--text-sec); font-weight: 500; }
+.form-input { height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; background: var(--surface); color: var(--text); outline: none; font-family: inherit; }
+.form-input:focus { border-color: var(--accent); }
+
+/* Badge */
+.badge { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 500; }
+.badge-blue { background: var(--accent-bg); color: var(--accent); }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-amber { background: var(--amber-bg); color: var(--amber); }
+
+/* Main table area */
+.main-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.stats-bar { display: flex; gap: 16px; padding: 10px 14px; border-bottom: 1px solid var(--border-light); font-size: 12px; }
+.stat { display: flex; align-items: center; gap: 5px; color: var(--text-sec); }
+.stat strong { color: var(--text); font-weight: 600; }
+.stat-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.toolbar { padding: 8px 12px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.toolbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.search-wrap { position: relative; }
+.search-icon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--text-sec); font-size: 12px; pointer-events: none; }
+.search-input { height: 30px; padding: 0 10px 0 28px; border: 1px solid var(--border); border-radius: 5px; font-size: 13px; background: var(--bg); color: var(--text); outline: none; width: 200px; font-family: inherit; }
+.search-input:focus { border-color: var(--accent); background: var(--surface); }
+.table-scroll { overflow: auto; flex: 1; max-height: calc(100vh - 260px); }
+table { border-collapse: collapse; width: max-content; min-width: 100%; }
+thead { position: sticky; top: 0; z-index: 10; }
+th { background: #f8f9fa; border-right: 1px solid var(--border-light); border-bottom: 2px solid var(--border); padding: 7px 9px; font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--text-sec); text-align: left; user-select: none; min-width: 85px; }
+th:first-child { min-width: 36px; width: 36px; text-align: center; position: sticky; left: 0; z-index: 20; background: #f8f9fa; }
+th:nth-child(2) { min-width: 36px; width: 36px; text-align: center; position: sticky; left: 36px; z-index: 20; background: #f8f9fa; }
+th:nth-child(3) { position: sticky; left: 72px; z-index: 20; background: #f8f9fa; min-width: 90px; }
+th.req::after { content: ' *'; color: var(--red); }
+th .cn { display: block; font-size: 9px; font-weight: 400; color: #bbb; }
+tr:hover td { background: #fafbff !important; }
+tr.sel td { background: var(--accent-bg) !important; }
+td { border-right: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light); padding: 0; vertical-align: middle; background: var(--surface); }
+td:first-child { text-align: center; position: sticky; left: 0; z-index: 5; background: inherit; font-size: 12px; color: var(--text-sec); padding: 0 4px; }
+td:nth-child(2) { text-align: center; position: sticky; left: 36px; z-index: 5; background: inherit; font-size: 12px; color: var(--text-sec); padding: 0 4px; }
+td:nth-child(3) { position: sticky; left: 72px; z-index: 5; background: inherit; }
+td input, td select { width: 100%; height: 30px; padding: 0 7px; border: none; background: transparent; font-size: 12px; color: var(--text); outline: none; font-family: inherit; }
+td input:focus, td select:focus { background: var(--accent-bg); }
+td.filled { background: var(--surface); }
+td.empty { background: #fafafa; }
+td.warn { background: #fffbeb; }
+.row-num { font-size: 11px; }
+.row-cb { accent-color: var(--accent); }
+
+/* Empty state */
+.empty-state { padding: 56px 20px; text-align: center; color: var(--text-sec); }
+.empty-state svg { display: block; margin: 0 auto 12px; }
+.empty-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+
+/* Modals */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; align-items: center; justify-content: center; }
+.overlay.open { display: flex; }
+.modal { background: var(--surface); border-radius: 12px; padding: 22px; width: 520px; max-width: 92vw; max-height: 90vh; overflow-y: auto; }
+.modal-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+/* PDF preview */
+.pdf-preview { max-height: 180px; overflow-y: auto; background: var(--bg); border-radius: 5px; padding: 10px; font-size: 11px; line-height: 1.5; color: var(--text-sec); font-family: monospace; white-space: pre-wrap; word-break: break-all; }
+
+/* Col toggle */
+.col-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; max-height: 300px; overflow-y: auto; }
+.col-item { display: flex; align-items: center; gap: 5px; font-size: 11px; padding: 4px 6px; border-radius: 4px; cursor: pointer; }
+.col-item:hover { background: var(--bg); }
+.col-item input { accent-color: var(--accent); }
+
+/* Toast */
+.toast-wrap { position: fixed; bottom: 18px; right: 18px; z-index: 9999; display: flex; flex-direction: column; gap: 7px; }
+.toast { padding: 10px 14px; border-radius: 8px; background: #222; color: #fff; font-size: 13px; max-width: 320px; animation: toastIn .18s ease; }
+.toast.ok { background: var(--green); }
+.toast.err { background: var(--red); }
+.toast.warn { background: var(--amber); }
+@keyframes toastIn { from { transform: translateX(110%); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Parse report */
+.parse-report { font-size: 12px; line-height: 1.7; color: var(--text-sec); }
+.parse-report strong { color: var(--text); }
+.parse-item-line { padding: 2px 0; border-bottom: 1px solid var(--border-light); }
+.parse-item-line:last-child { border: none; }
+
+@media (max-width: 960px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { order: 2; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">PDF订单 <em>→</em> 生产单转换 <span class="badge badge-blue" style="margin-left:6px; font-weight:400;">Sombra Shades</span></div>
+  <div class="header-actions">
+    <button class="btn btn-secondary" onclick="openColModal()">⊞ 列</button>
+    <button class="btn btn-secondary" onclick="addEmptyRow()">+ 新增行</button>
+    <button class="btn btn-red" id="deleteBtn" disabled onclick="deleteSelected()">删除选中</button>
+    <button class="btn btn-green" id="exportBtn" disabled onclick="exportExcel()">⬇ 导出生产单</button>
+  </div>
+</div>
+
+<div class="page">
+<div class="layout">
+
+<!-- Sidebar -->
+<div class="sidebar">
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="card-head">上传 PDF 订单</div>
+    <div class="card-body">
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          <line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/>
+        </svg>
+        <div class="upload-label">点击上传 / 拖入 PDF</div>
+        <div class="upload-hint">支持多文件，Sombra Shades Order Confirmation</div>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf" multiple>
+      <div class="progress-wrap" id="progressWrap" style="display:none;">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="progress-label" id="progressLabel"></div>
+      </div>
+      <div class="file-list" id="fileList"></div>
+    </div>
+  </div>
+
+  <!-- Defaults -->
+  <div class="card">
+    <div class="card-head">订单默认值 <span class="badge badge-blue">批量填充</span></div>
+    <div class="card-body">
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <label class="form-label">店铺（默认）</label>
+          <input class="form-input" id="d_store" value="Customer-B1" placeholder="Customer-B1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">编号（默认）</label>
+          <input class="form-input" id="d_no" value="241#" placeholder="如 241#">
+        </div>
+        <div class="form-group">
+          <label class="form-label">付款日期</label>
+          <input class="form-input" id="d_paydate" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">系统标识ID</label>
+          <input class="form-input" id="d_sysid" value="新增">
+        </div>
+        <div class="form-group">
+          <label class="form-label">是否加急</label>
+          <select class="form-input" id="d_urgent">
+            <option value="0">0（否）</option>
+            <option value="1">1（加急）</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:10px; width:100%;" onclick="applyDefaults()">应用到所有行</button>
+    </div>
+  </div>
+
+  <!-- PDF Preview -->
+  <div class="card" id="previewCard" style="display:none;">
+    <div class="card-head">PDF 原文预览
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('previewCard').style.display='none'">收起</button>
+    </div>
+    <div class="card-body" style="padding:10px;">
+      <div class="pdf-preview" id="pdfPreview"></div>
+    </div>
+  </div>
+
+  <!-- Parse report -->
+  <div class="card" id="reportCard" style="display:none;">
+    <div class="card-head">解析报告 <span class="badge badge-green" id="reportBadge">0 行</span></div>
+    <div class="card-body" style="padding:10px;">
+      <div class="parse-report" id="parseReport"></div>
+    </div>
+  </div>
+
+</div><!-- /sidebar -->
+
+<!-- Table -->
+<div>
+  <div class="main-card">
+    <div class="stats-bar">
+      <div class="stat"><span class="stat-dot"></span>总行 <strong id="stTotal">0</strong></div>
+      <div class="stat">已填产品 <strong id="stFilled">0</strong></div>
+      <div class="stat">已选 <strong id="stSel">0</strong></div>
+    </div>
+    <div class="toolbar">
+      <label style="display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; white-space:nowrap;">
+        <input type="checkbox" id="cbAll" onchange="toggleAll(this.checked)" class="row-cb"> 全选
+      </label>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" placeholder="搜索产品/订单/房间..." id="searchInput" oninput="onSearch(this.value)">
+      </div>
+      <span id="filterHint" style="font-size:12px; color:var(--text-sec); display:none;"></span>
+      <div class="toolbar-right">
+        <button class="btn btn-secondary btn-sm" onclick="openColModal()">⊞ 列显示</button>
+      </div>
+    </div>
+    <div class="table-scroll" id="tableScroll">
+      <div class="empty-state" id="emptyState">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
+          <line x1="9" y1="3" x2="9" y2="21"/>
+        </svg>
+        <div class="empty-title">暂无数据</div>
+        <div style="font-size:13px;">上传 Sombra Shades 的 Order Confirmation PDF，自动解析为生产单</div>
+      </div>
+      <table id="dataTable" style="display:none;">
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- /layout -->
+</div><!-- /page -->
+
+<!-- Toast -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- Col modal -->
+<div class="overlay" id="colModal">
+  <div class="modal">
+    <div class="modal-title">列显示设置</div>
+    <div class="col-grid" id="colGrid"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="colAll(true)">全选</button>
+      <button class="btn btn-secondary" onclick="colAll(false)">全不选</button>
+      <button class="btn btn-primary" onclick="applyColVis(); closeColModal()">确定</button>
+    </div>
+  </div>
+</div>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ════════════════════════════════════════════════════════
+//  Column definitions — exactly matches production template
+// ════════════════════════════════════════════════════════
+const COLS = [
+  { k:'store',      label:'店铺',                en:'Store',       req:true,  w:95,  t:'text' },
+  { k:'order_no',   label:'订单号',               en:'SO#',         req:true,  w:100, t:'text' },
+  { k:'no',         label:'编号',                 en:'No.',         req:false, w:70,  t:'text' },
+  { k:'product',    label:'产品名称',              en:'Product',     req:true,  w:120, t:'text' },
+  { k:'power',      label:'供电方式',              en:'Power',       req:false, w:90,  t:'select', opts:['','直流','锂电','卷簧手拉','太阳能','有线','USB'] },
+  { k:'qty',        label:'数量',                  en:'Qty',         req:true,  w:60,  t:'number' },
+  { k:'fabric1',    label:'面料型号1(上或前)',      en:'Fabric1',     req:false, w:140, t:'text' },
+  { k:'color1',     label:'面料颜色1',             en:'Color1',      req:false, w:85,  t:'text' },
+  { k:'fabric2',    label:'面料型号2(下或后)',      en:'Fabric2',     req:false, w:140, t:'text' },
+  { k:'color2',     label:'面料颜色2',             en:'Color2',      req:false, w:85,  t:'text' },
+  { k:'blackout',   label:'遮光率',               en:'Blackout',    req:false, w:85,  t:'text' },
+  { k:'mount',      label:'内装/外装',             en:'Mount',       req:false, w:85,  t:'select', opts:['','内装','外装'] },
+  { k:'width',      label:'客户测量尺寸宽度INCH',  en:'Width',       req:false, w:110, t:'text' },
+  { k:'height',     label:'客户测量尺寸高度INCH',  en:'Height',      req:false, w:110, t:'text' },
+  { k:'diagonal',   label:'客户测量尺寸斜边INCH',  en:'Diagonal',    req:false, w:110, t:'text' },
+  { k:'motor',      label:'电机选型',              en:'Motor',       req:false, w:90,  t:'text' },
+  { k:'hub_name',   label:'Hub名称',              en:'Hub',         req:false, w:90,  t:'text' },
+  { k:'hub_qty',    label:'Hub数量',              en:'HubQty',      req:false, w:70,  t:'number' },
+  { k:'cover',      label:'罩壳',                  en:'Cover',       req:false, w:110, t:'text' },
+  { k:'cover_color',label:'罩壳颜色',              en:'CoverColor',  req:false, w:80,  t:'text' },
+  { k:'beam',       label:'底梁',                  en:'Beam',        req:false, w:100, t:'text' },
+  { k:'beam_color', label:'底梁颜色',              en:'BeamColor',   req:false, w:80,  t:'text' },
+  { k:'solar_name', label:'太阳能板名称',           en:'Solar',       req:false, w:100, t:'text' },
+  { k:'solar_qty',  label:'太阳能板数量',           en:'SolarQty',    req:false, w:90,  t:'number' },
+  { k:'remote',     label:'遥控器型号',             en:'Remote',      req:false, w:100, t:'text' },
+  { k:'remote_qty', label:'遥控器数量',             en:'RemoteQty',   req:false, w:85,  t:'number' },
+  { k:'rotation',   label:'正转反转',              en:'Rotation',    req:false, w:80,  t:'select', opts:['','正转','反转'] },
+  { k:'motor_side', label:'马达左装右装',           en:'MotorSide',   req:false, w:90,  t:'select', opts:['','左装','右装'] },
+  { k:'shade_strip',label:'遮光条',                en:'ShadeStrip',  req:false, w:120, t:'text' },
+  { k:'ext_wire',   label:'延长线',                en:'ExtWire',     req:false, w:75,  t:'select', opts:['','有','无'] },
+  { k:'ext_wire_qty',label:'延长线数量',           en:'ExtWireQty',  req:false, w:85,  t:'number' },
+  { k:'power_wire', label:'电源线',                en:'PwrWire',     req:false, w:75,  t:'text' },
+  { k:'adapter',    label:'电源适配器',             en:'Adapter',     req:false, w:95,  t:'text' },
+  { k:'adapter_qty',label:'电源适配器数量',         en:'AdapterQty',  req:false, w:100, t:'number' },
+  { k:'room_no',    label:'房间编号',              en:'Room',        req:false, w:130, t:'text' },
+  { k:'edging',     label:'包边',                  en:'Edging',      req:false, w:75,  t:'text' },
+  { k:'customer',   label:'客户信息',              en:'Customer',    req:false, w:200, t:'text' },
+  { k:'remark',     label:'备注',                  en:'Remark',      req:false, w:160, t:'text' },
+  { k:'pay_date',   label:'付款时间',              en:'PayDate',     req:false, w:105, t:'date' },
+  { k:'contact',    label:'客户邮箱电话',           en:'Contact',     req:false, w:130, t:'text' },
+  { k:'sys_id',     label:'系统标识ID',             en:'SysID',       req:false, w:85,  t:'text' },
+  { k:'urgent',     label:'是否加急',              en:'Urgent',      req:false, w:75,  t:'text' },
+];
+
+// ════════════════════════════════════════════════════════
+//  Sombra Shades PDF → Production Sheet Mapping Tables
+// ════════════════════════════════════════════════════════
+
+// Product type: PDF English description → Chinese（长关键词优先，includes 匹配）
+const PRODUCT_TYPE_MAP = {
+  'CORDLESS MANUAL WOVEN WOOD SHADE': '麻草帘',
+  'MOTORIZED WOVEN WOOD SHADE': '麻草帘',
+  'WOVEN WOOD SHADE': '麻草帘',
+  'MOTORIZED ROLLER SHADE': '卷帘',
+  'CORDLESS MANUAL ROLLER SHADE': '卷帘',
+  'ROLLER SHADE': '卷帘',
+  'ZEBRA SHADE': '斑马帘',
+  'BAMBOO SHADE': '竹帘',
+  'CELLULAR SHADE': '蜂巢帘',
+  'HONEYCOMB SHADE': '蜂巢帘',
+  'SHEER SHADE': '香格里拉帘',
+  'ROMAN SHADE': '罗马帘',
+  'ZEBRA SHADE': '斑马帘',
+};
+
+// Power type: PDF → Chinese
+const POWER_MAP = {
+  'DC 12V': '直流',
+  'BATTERY POWERED': '锂电',
+  'BATTERY': '锂电',
+  'SOLAR POWERED': '太阳能',
+  'SOLAR': '太阳能',
+  'HARDWIRED': '有线',
+  'USB': 'USB',
+};
+
+// Accessories: PDF description keyword → production product code suffix
+// NOTE: some descriptions span 2 lines in the PDF; patterns are designed to match partial text
+const ACCESSORY_MAP = [
+  // 机架电源（优先匹配，避免被通道遥控误判）
+  { kw: /18\s*OUTPUTS?\s*(POWER|PANEL|DISTRIBUTION)/i, code: '18口12V机架电源-241#' },
+  { kw: /12\s*OUTPUTS?\s*(POWER|PANEL|DISTRIBUTION)/i, code: '12口12V机架电源-241#' },
+  // 美式墙面开关（DECORA / WALL SWITCH 风格，先于普通遥控判断）
+  { kw: /SINGLE[\s\-]?CHANNEL.*(WALL|DECORA)/i,        code: 'WR06-01CH-241#' },
+  { kw: /5[\s\-]?CHANNEL.*(WALL|DECORA)/i,             code: 'WR06-05CH-241#' },
+  { kw: /4[\s\-]?CHANNEL.*(WALL|DECORA)/i,             code: 'WR06-04CH-241#' },
+  { kw: /DECORA/i,                                      code: 'WR06-01CH-241#' },
+  // 手持遥控器（从高通道往低匹配）
+  { kw: /18[\s\-]?CHANNEL/i,                           code: 'WR01-18CH-241#' },
+  { kw: /15[\s\-]?CHANNEL/i,                           code: 'WR01-15CH-241#' },
+  { kw: /10[\s\-]?CHANNEL/i,                           code: 'WR01-10CH-241#' },
+  { kw: /9[\s\-]?CHANNEL/i,                            code: 'WR01-09CH-241#' },
+  { kw: /5[\s\-]?CHANNEL/i,                            code: 'WR01-05CH-241#' },
+  { kw: /4[\s\-]?CHANNEL/i,                            code: 'WR01-04CH-241#' },
+  { kw: /3[\s\-]?CHANNEL/i,                            code: 'WR01-03CH-241#' },
+  { kw: /SINGLE[\s\-]?CHANNEL|1[\s\-]?CHANNEL/i,       code: 'WR01-01CH-241#' },
+  // 充电器 / 适配器
+  { kw: /MAGNETIC\s*(USB[-\s]?C?)?\s*CHARGING\s*CABLE/i, code: '磁吸充电线-241#' },
+  { kw: /MAGNETIC\s*TIP/i,                             code: '磁吸充电线头-241#' },
+  { kw: /DUAL\s*5V|5V.*USB.*CHARGER|USB.*CHARGER/i,    code: '5V美规USB充电器-241#' },
+  { kw: /5V\s*CHARGER/i,                               code: '5V美规USB充电器-241#' },
+  { kw: /12V\s*POWER\s*SUPPLY/i,                       code: '12V美规适配器-241#' },
+];
+
+// ════════════════════════════════════════════════════════
+//  Helper functions
+// ════════════════════════════════════════════════════════
+
+function fractionToDecimal(s) {
+  if (!s) return null;
+  s = s.trim();
+  // "70 1/2", "22 3/8", "106 5/8"
+  const m = s.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+  if (m) {
+    const v = parseInt(m[1]) + parseInt(m[2]) / parseInt(m[3]);
+    return Math.round(v * 1000) / 1000;
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function normalizeFabricCode(code) {
+  if (!code) return '';
+  code = code.trim();
+  if (code.includes('-')) return code; // Already normalized
+  // SMSCP2002B → SM-SC-P2002B
+  const m = code.match(/^SM([A-Z]{2})(.+)$/i);
+  if (m) return `SM-${m[1].toUpperCase()}-${m[2]}`;
+  return code;
+}
+
+function mapFascia(fascia, fabricCovered) {
+  if (!fascia) return { cover: '', cover_color: '' };
+  const fc = fabricCovered === 'YES';
+  const f = fascia.toUpperCase();
+  if (f.includes('WARM WHITE') && !fc)   return { cover: '方罩壳-B2', cover_color: '乳白色' };
+  if (f.includes('WHITE') && fc)          return { cover: '贴布方罩壳-B2', cover_color: '白色' };
+  if (f.includes('WHITE') && !fc)         return { cover: '方罩壳-B2', cover_color: '白色' };
+  if (f.includes('WARM WHITE'))           return { cover: '方罩壳-B2', cover_color: '乳白色' };
+  if (f.includes('BLACK'))                return { cover: '方罩壳-B2', cover_color: '黑色' };
+  if (f.includes('CHAR BROWN') || f.includes('CHARCOAL BROWN') || f.includes('BROWN'))
+                                          return { cover: '方罩壳-B2', cover_color: '棕色' };
+  return { cover: fascia, cover_color: '' };
+}
+
+function mapBottomBar(bottomBar) {
+  if (!bottomBar) return { beam: '', beam_color: '' };
+  const b = bottomBar.toUpperCase();
+  if (b.includes('FABRIC WRAPPED') || b.includes('WRAPPED')) return { beam: '包布下梁-A1', beam_color: '白色' };
+  return { beam: bottomBar, beam_color: '' };
+}
+
+function mapPower(powerType) {
+  if (!powerType) return '';
+  const pt = powerType.toUpperCase().trim();
+  for (const [k, v] of Object.entries(POWER_MAP)) {
+    if (pt.includes(k)) return v;
+  }
+  return powerType;
+}
+
+function mapProductType(desc) {
+  const du = desc.toUpperCase();
+  for (const [k, v] of Object.entries(PRODUCT_TYPE_MAP)) {
+    if (du.includes(k)) return v;
+  }
+  // Fallback: first words
+  return du.split(' ').slice(0, 3).join(' ');
+}
+
+function mapAccessory(descLine) {
+  for (const entry of ACCESSORY_MAP) {
+    if (entry.kw.test(descLine)) return entry.code;
+  }
+  return null;
+}
+
+// ════════════════════════════════════════════════════════
+//  PDF text extraction via PDF.js
+// ════════════════════════════════════════════════════════
+async function extractText(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let full = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    // Sort by Y (desc) then X (asc) to preserve reading order
+    const sorted = content.items.slice().sort((a, b) => {
+      const ay = Math.round(a.transform[5] / 4) * 4;
+      const by = Math.round(b.transform[5] / 4) * 4;
+      if (ay !== by) return by - ay;
+      return a.transform[4] - b.transform[4];
+    });
+    let lastY = null;
+    for (const item of sorted) {
+      const y = Math.round(item.transform[5] / 3) * 3;
+      if (lastY !== null && Math.abs(y - lastY) > 4) full += '\n';
+      full += item.str + ' ';
+      lastY = y;
+    }
+    full += '\n\n';
+  }
+  return full.trim();
+}
+
+// ════════════════════════════════════════════════════════
+//  Sombra Shades Order Confirmation parser
+// ════════════════════════════════════════════════════════
+function parseSombraOrder(rawText) {
+  const result = { header: {}, items: [], warnings: [] };
+  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // ── Header info ──
+  const soMatch = rawText.match(/Sales\s+Order\s+(\d+)/);
+  result.header.order_no = soMatch ? 'SO#' + soMatch[1] : '';
+
+  // 兼容 "Date Ordered" 和 "Date Quoted" 两种格式
+  const dateMatch = rawText.match(/Date\s+(?:Ordered|Quoted)[:\s]+(\d{2})\/(\d{2})\/(\d{4})/i);
+  if (dateMatch) {
+    result.header.pay_date = `${dateMatch[3]}-${dateMatch[1]}-${dateMatch[2]}`;
+  }
+
+  result.header.store = document.getElementById('d_store').value || 'Customer-B1';
+  result.header.no = document.getElementById('d_no').value || '241#';
+  result.header.sys_id = document.getElementById('d_sysid').value || '新增';
+  result.header.urgent = document.getElementById('d_urgent').value || '0';
+
+  // ── SHIP TO → customer info ──
+  result.header.customer = extractCustomerInfo(rawText);
+
+  // ── Parse item blocks ──
+  // Each block starts with: "N  M  EACH  DESCRIPTION..."
+  // Split at item start lines
+  const itemStartRe = /^(\d+)\s+(\d+)\s+EACH\s+(.+)/;
+  const blocks = [];
+  let cur = null;
+  for (const line of lines) {
+    // Skip page header lines
+    if (/^ORDER CONFIRMATION #\d+/.test(line)) continue;
+    if (/^Item\s+Qty\s+Description/.test(line)) continue;
+    if (/^(TT|FF|PP|BB)/.test(line) && line.includes('oo')) continue; // garbled totals
+    if (/^SSUUBB|^TTOOTTAALL|^FFrr|^PPaayy|^BBaall/.test(line)) continue;
+
+    const m = line.match(itemStartRe);
+    if (m) {
+      if (cur) blocks.push(cur);
+      cur = {
+        itemNo: parseInt(m[1]),
+        qty: parseInt(m[2]),
+        descLine: m[3].replace(/[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}.*$/, '').trim(),
+        props: {},
+        allText: m[3]  // accumulate all text lines for this block
+      };
+    } else if (cur) {
+      cur.allText += ' ' + line;
+      parseItemPropLine(line, cur);
+    }
+  }
+  if (cur) blocks.push(cur);
+
+  // ── Convert blocks to production rows ──
+  for (const block of blocks) {
+    const rows = blockToRows(block, result.header);
+    if (rows.length) result.items.push(...rows);
+    else result.warnings.push(`Item ${block.itemNo}: skipped (${block.descLine.slice(0, 40)})`);
+  }
+
+  return result;
+}
+
+// ════════════════════════════════════════════════════════
+//  Purchase Order (PO) format parser
+//  格式示例：Purchase Order 130 / Sales Order: 1097
+// ════════════════════════════════════════════════════════
+function parsePurchaseOrder(rawText) {
+  const result = { header: {}, items: [], warnings: [] };
+  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // ── 订单号：优先取 Sales Order，备用 PO 号 ──
+  const soMatch  = rawText.match(/Sales\s+Order:\s*(\d+)/i);
+  const poMatch  = rawText.match(/Purchase\s+Order\s+(\d+)/i);
+  result.header.order_no = soMatch ? 'SO#' + soMatch[1]
+                         : poMatch ? 'PO#' + poMatch[1] : '';
+
+  // ── 下单日期 ──
+  const dateMatch = rawText.match(/Date\s+Ordered:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+  if (dateMatch) {
+    result.header.pay_date = `${dateMatch[3]}-${dateMatch[1]}-${dateMatch[2]}`;
+  }
+
+  // ── 店铺 / 标识（Sidemark） ──
+  const sideMatch = rawText.match(/Sidemark:\s*(.+)/i);
+  result.header.store = sideMatch
+    ? sideMatch[1].trim()
+    : (document.getElementById('d_store').value || 'Customer-B1');
+
+  // ── 其他默认字段 ──
+  result.header.no     = document.getElementById('d_no').value    || '241#';
+  result.header.sys_id = document.getElementById('d_sysid').value || '新增';
+  result.header.urgent = document.getElementById('d_urgent').value || '0';
+
+  // ── 客户信息（Ship To 块） ──
+  result.header.customer = extractCustomerInfoPO(rawText);
+
+  // ── 联系方式 ──
+  const phoneMatch = rawText.match(/Phone:\s*([\(\d\)\s\-]+)/);
+  if (phoneMatch) result.header.contact = phoneMatch[1].trim();
+
+  // ── 解析行项目 ──
+  // 格式："{item#} {qty} SPECIAL {unit_price} {ext_price}"
+  const itemStartRe = /^(\d+)\s+(\d+)\s+SPECIAL\b/;
+  const blocks = [];
+  let cur = null;
+  let skipHeader = false;  // 换页时跳过重复页眉
+
+  for (const line of lines) {
+    // 遇到分页标志行 → 进入"跳过页眉"模式
+    if (/^Purchase\s+Order\s+\d+/.test(line)) { skipHeader = true; continue; }
+
+    // 下一个行项目出现 → 退出跳过模式
+    if (itemStartRe.test(line)) skipHeader = false;
+
+    // 页眉期间只放行项目行，其余全跳过
+    if (skipHeader) continue;
+
+    // 其他固定页眉行
+    if (/^Sombra\s+Shades/.test(line)) continue;
+    if (/^Item\s+Qty\s+UM/.test(line)) continue;
+    if (/^SUPPLIER:|^SHIP\s+TO:/.test(line)) continue;
+    if (/^TOTAL:|^EFFECTIVE\s+DISCOUNT|^DISCOUNTED/.test(line)) continue;
+
+    const m = line.match(itemStartRe);
+    if (m) {
+      if (cur) blocks.push(cur);
+      const restOfLine = line.replace(itemStartRe, '').replace(/[\d,]+\.\d{2}.*$/, '').trim();
+      cur = {
+        itemNo:   parseInt(m[1]),
+        qty:      parseInt(m[2]),
+        descLine: restOfLine,
+        props:    {},
+        allText:  restOfLine,
+      };
+    } else if (cur) {
+      if (!cur.descLine && line) cur.descLine = line;
+      cur.allText += ' ' + line;
+      parseItemPropLine(line, cur);
+    }
+  }
+  if (cur) blocks.push(cur);
+
+  // ── 转换为生产行 ──
+  for (const block of blocks) {
+    // descLine 可能在 item 行之后的第一行
+    if (!block.descLine) block.descLine = block.allText.trim().split(/\s{2,}/)[0] || '';
+    const rows = blockToRows(block, result.header);
+    if (rows.length) result.items.push(...rows);
+    else result.warnings.push(`Item ${block.itemNo}: skipped (${block.descLine.slice(0, 40)})`);
+  }
+
+  return result;
+}
+
+function extractCustomerInfoPO(rawText) {
+  // PO 格式的 SHIP TO 块：
+  // "SHIP TO: Account:\nCOMPANY Phone: ...\nADDR\n...\nContact: NAME"
+  const idx = rawText.search(/SHIP\s+TO:/i);
+  if (idx === -1) return '';
+  const block = rawText.slice(idx, idx + 600);
+  const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+
+  let company = '', contact = '', phone = '', addr = [];
+  for (let i = 1; i < lines.length && i < 12; i++) {
+    const line = lines[i];
+    if (/^Item\s+Qty|^SUPPLIER:|^\d+\s+\d+\s+SPECIAL/.test(line)) break;
+    const cm = line.match(/Contact:\s*(.+)/i);
+    if (cm) { contact = cm[1].trim(); continue; }
+    const pm = line.match(/Phone:\s*([\(\d\)\s\-]+)/i);
+    if (pm) { phone = pm[1].trim(); continue; }
+    if (/^Fax:/i.test(line)) continue;
+    if (i === 1) { company = line.replace(/Account:.*/i, '').trim(); continue; }
+    if (line) addr.push(line);
+  }
+  return [contact, company, ...addr, phone ? 'Phone: ' + phone : ''].filter(Boolean).join('\n');
+}
+
+function parseItemPropLine(line, cur) {
+  const p = cur.props;
+  // Each property: key followed by value on same line
+  // "Room FRONT LOBBY 1", "Width 70 1/2", "Motor Side LEFT"
+  // Some lines may have multiple props run together like "Width 70 1/2Height 70 3/8" if layout shifts
+  // [:\s]+ 同时兼容 "Property: Value" (PO格式) 和 "Property Value" (Order Confirmation格式)
+  const propsRe = [
+    [/^Color:\s*(.+?)\s*\(/, 'color_code'],
+    [/^Room[:\s]+(.+)$/, 'room'],
+    [/^Width[:\s]+(.+)$/, 'width'],
+    [/^Height[:\s]+(.+)$/, 'height'],
+    [/^Mount[:\s]+(INSIDE|OUTSIDE)/, 'mount'],
+    [/^Motor\s+Type[:\s]+(.+)$/, 'motor_type'],
+    [/^Power\s+Type[:\s]+(.+)$/, 'power_type'],
+    [/^Motor\s+Side[:\s]+(LEFT|RIGHT)/, 'motor_side'],
+    [/^Fascia[:\s]+(.+)$/, 'fascia'],
+    [/^Fabric\s+Covered\s+Square[:\s]+(YES|NO)/, 'fabric_covered'],
+    [/^Bottom\s+Bar[:\s]+(.+)$/, 'bottom_bar'],
+    [/^Roll\s+Type[:\s]+(.+)$/, 'roll_type'],
+    [/^Controls\s+And\s+Accessories[:\s]+(.+)$/, 'accessory_desc'],
+    [/^Edge\s+Binding[:\s]+(YES|NO)/, 'edge_binding'],
+    [/^Liner[:\s]+(YES|NO)$/, 'liner'],
+    [/^Liner\s+Color[:\s]+(.+)$/, 'liner_color'],
+    [/^Side\s+Channels[:\s]+(.+)$/, 'side_channels'],
+  ];
+  for (const [re, key] of propsRe) {
+    const m = line.match(re);
+    if (m) { p[key] = m[1].trim(); return; }
+  }
+  // Width/Height on same line (sometimes pdfplumber merges them)
+  const whm = line.match(/Width\s+([\d\s\/]+)\s*Height\s+([\d\s\/]+)/);
+  if (whm) { p.width = whm[1].trim(); p.height = whm[2].trim(); return; }
+  // Color line without parens
+  if (line.startsWith('Color:')) {
+    const cm = line.match(/Color:\s*([^\s(]+)/);
+    if (cm) p.color_code = cm[1];
+  }
+}
+
+function blockToRows(block, header) {
+  const { descLine, qty, props } = block;
+  const rows = [];
+
+  const descUp = descLine.toUpperCase();
+
+  // Skip freight/promo lines
+  if (/FREE FREIGHT|FREIGHT CHARGE|FREIGHT PROMO/.test(descUp)) return [];
+
+  // ── Accessory items ──
+  if (descUp.includes('MOTOR CONTROLS AND ACCESSORIES') || descUp.includes('ACCESSORIES')) {
+    // Use all collected text for the block to handle multi-line descriptions
+    const accDesc = (props.accessory_desc || '') + ' ' + (block.allText || descLine);
+    const code = mapAccessory(accDesc);
+    const row = makeRow(header, {
+      product: code || accDesc.replace(/\s+/g, ' ').trim() + (code ? '' : ' [需确认]'),
+      qty: String(qty),
+    });
+    rows.push(row);
+    return rows;
+  }
+
+  // ── Shade items ──
+  const productType = mapProductType(descLine);
+  const isMotorized = /MOTORIZED/.test(descUp);
+  const isCordless = /CORDLESS/.test(descUp);
+  const isWoven = /WOVEN WOOD/.test(descUp);
+
+  // Power
+  let power = '';
+  if (isCordless) power = '卷簧手拉';
+  else if (props.power_type) power = mapPower(props.power_type);
+
+  // Motor：描述含 MOTORIZED 或 PDF 中有 Motor Type 字段均视为有电机
+  const motor = (isMotorized || !!props.motor_type) ? '标准电机' : '';
+
+  // Fabric code
+  const rawCode = props.color_code || '';
+  const fabric1 = normalizeFabricCode(rawCode);
+
+  // Dimensions
+  const width = fractionToDecimal(props.width);
+  const height = fractionToDecimal(props.height);
+
+  // Mount
+  const mount = props.mount === 'INSIDE' ? '内装' : props.mount === 'OUTSIDE' ? '外装' : '';
+
+  // Motor side
+  const motorSide = props.motor_side === 'LEFT' ? '左装' : props.motor_side === 'RIGHT' ? '右装' : '';
+
+  // Rotation
+  const rotation = (props.roll_type && props.roll_type.toUpperCase().includes('ROLLBACK')) ? '正转' : '';
+
+  // Fascia → cover
+  const fasciaInfo = isWoven ? { cover: '', cover_color: '' } : mapFascia(props.fascia, props.fabric_covered);
+
+  // Bottom bar → beam
+  const beamInfo = isWoven ? { beam: '', beam_color: '' } : mapBottomBar(props.bottom_bar);
+
+  // Side channels → 遮光条产品名称
+  let shade_strip = '';
+  const sc = (props.side_channels || '').toUpperCase();
+  if (sc && sc !== 'NONE') {
+    if (/BLACK/.test(sc))      shade_strip = '黑色40遮光轨-241#';
+    else if (/WHITE/.test(sc)) shade_strip = '白色40遮光轨-241#';
+    else                       shade_strip = sc; // 其他颜色保留原文
+  }
+
+  // Edge binding
+  let edging = '';
+  if (props.edge_binding === 'NO') edging = '不要包边';
+  else if (props.edge_binding === 'YES') edging = '包边';
+
+  // Liner/remark (for woven wood)
+  let remark = '';
+  if (props.liner === 'YES' && props.liner_color) {
+    const lc = props.liner_color.trim();
+    // Extract CC code if present
+    const ccMatch = lc.match(/CC-\d+\s+\w+/);
+    remark = ccMatch ? `全遮光衬布型号：${ccMatch[0]}` : `全遮光衬布：${lc}`;
+  }
+
+  rows.push(makeRow(header, {
+    product: productType,
+    power,
+    qty: String(qty),
+    fabric1,
+    motor,
+    mount,
+    width: width != null ? String(width) : '',
+    height: height != null ? String(height) : '',
+    rotation,
+    motor_side: motorSide,
+    cover: fasciaInfo.cover,
+    cover_color: fasciaInfo.cover_color,
+    beam: beamInfo.beam,
+    beam_color: beamInfo.beam_color,
+    shade_strip,
+    room_no: props.room || '',
+    edging,
+    remark,
+  }));
+  return rows;
+}
+
+function extractCustomerInfo(text) {
+  // Find SHIP TO block and format as the production template expects
+  // Pattern: "SHIP TO:\n[COMPANY]   Contact: [NAME]\n[ADDR]\n[CITY]\n[STATE ZIP]\nPhone: [PHONE]"
+  const shipIdx = text.indexOf('SHIP TO:');
+  if (shipIdx === -1) return '';
+  const block = text.slice(shipIdx, shipIdx + 600);
+  const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+
+  let contactName = '', company = '', addrLines = [], phone = '';
+  for (let i = 1; i < lines.length && i < 10; i++) {
+    const line = lines[i];
+    if (/^Item\s+Qty/.test(line)) break;
+    const cm = line.match(/Contact:\s*(.+)/);
+    if (cm) { contactName = cm[1].trim(); continue; }
+    if (line.startsWith('Phone:')) { phone = line; continue; }
+    if (i === 1 && !company) { company = line.replace(/Contact:.*/,'').trim(); continue; }
+    if (line && !line.startsWith('BILL TO:') && !line.startsWith('SHIP TO:')) {
+      addrLines.push(line);
+    }
+  }
+  const parts = [contactName, [company].concat(addrLines).filter(Boolean).join(' '), phone].filter(Boolean);
+  return parts.join('\n');
+}
+
+function makeRow(header, overrides) {
+  const row = { _id: _rowId++, _selected: false };
+  COLS.forEach(c => { row[c.k] = header[c.k] || ''; });
+  Object.assign(row, overrides);
+  return row;
+}
+
+// ════════════════════════════════════════════════════════
+//  State
+// ════════════════════════════════════════════════════════
+let rows = [];
+let _rowId = 0;
+let colVis = COLS.map(() => true);
+let searchQ = '';
+
+// ════════════════════════════════════════════════════════
+//  Init
+// ════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('d_paydate').value = new Date().toISOString().split('T')[0];
+  buildHeader();
+  buildColGrid();
+  setupDrop();
+  document.getElementById('fileInput').addEventListener('change', e => {
+    handleFiles(Array.from(e.target.files));
+    e.target.value = '';
+  });
+});
+
+// ════════════════════════════════════════════════════════
+//  Table Header
+// ════════════════════════════════════════════════════════
+function buildHeader() {
+  const tr = document.getElementById('thead');
+  tr.innerHTML = '';
+  // Col 1: row# sticky
+  const th0 = document.createElement('th');
+  th0.style.cssText = 'min-width:36px; width:36px; position:sticky; left:0; z-index:20; background:#f8f9fa;';
+  th0.textContent = '#';
+  tr.appendChild(th0);
+  // Col 2: checkbox
+  const th1 = document.createElement('th');
+  th1.style.cssText = 'min-width:36px; width:36px; text-align:center; position:sticky; left:36px; z-index:20; background:#f8f9fa;';
+  th1.innerHTML = '<input type="checkbox" id="thCb" onchange="toggleAll(this.checked)" class="row-cb">';
+  tr.appendChild(th1);
+  // Data cols
+  COLS.forEach((c, i) => {
+    const th = document.createElement('th');
+    th.dataset.ci = i;
+    th.style.minWidth = c.w + 'px';
+    th.style.display = colVis[i] ? '' : 'none';
+    th.innerHTML = c.label + `<span class="cn">${i+1}</span>`;
+    if (c.req) th.classList.add('req');
+    tr.appendChild(th);
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  Render
+// ════════════════════════════════════════════════════════
+function render() {
+  const tbody = document.getElementById('tbody');
+  const table = document.getElementById('dataTable');
+  const empty = document.getElementById('emptyState');
+  const display = searchQ ? rows.filter(r =>
+    [r.product, r.order_no, r.room_no, r.store, r.remark].some(v => (v||'').toLowerCase().includes(searchQ))
+  ) : rows;
+
+  if (!rows.length) {
+    table.style.display = 'none'; empty.style.display = 'block';
+    updateUI(); return;
+  }
+  table.style.display = ''; empty.style.display = 'none';
+  tbody.innerHTML = '';
+
+  display.forEach((row, ri) => {
+    const tr = document.createElement('tr');
+    if (row._selected) tr.classList.add('sel');
+
+    // Row number
+    const td0 = document.createElement('td');
+    td0.className = 'row-num'; td0.textContent = ri + 1;
+    tr.appendChild(td0);
+
+    // Checkbox
+    const td1 = document.createElement('td');
+    td1.style.textAlign = 'center';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.className = 'row-cb'; cb.checked = row._selected;
+    cb.onchange = e => { row._selected = e.target.checked; updateUI(); updateRowSel(tr, row._selected); };
+    td1.appendChild(cb); tr.appendChild(td1);
+
+    // Data cols
+    COLS.forEach((col, ci) => {
+      const td = document.createElement('td');
+      td.style.display = colVis[ci] ? '' : 'none';
+      const val = row[col.k] || '';
+      td.className = val ? 'filled' : 'empty';
+
+      if (col.t === 'select') {
+        const sel = document.createElement('select');
+        // Ensure current value is in options
+        const allOpts = col.opts.includes(val) ? col.opts : [val, ...col.opts.filter(o => o !== val)];
+        allOpts.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o; opt.textContent = o || '—';
+          if (o === val) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        sel.onchange = e => { row[col.k] = e.target.value; td.className = e.target.value ? 'filled' : 'empty'; updateUI(); };
+        td.appendChild(sel);
+      } else {
+        const inp = document.createElement('input');
+        inp.type = col.t === 'number' ? 'number' : col.t === 'date' ? 'date' : 'text';
+        inp.value = val;
+        if (col.req) inp.placeholder = col.label;
+        inp.onchange = e => { row[col.k] = e.target.value; td.className = e.target.value ? 'filled' : 'empty'; updateUI(); };
+        inp.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); moveFocus(tr, ci, 1); }
+          if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(tr, ci, -1); }
+        });
+        td.appendChild(inp);
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  updateUI();
+}
+
+function updateRowSel(tr, sel) {
+  if (sel) tr.classList.add('sel'); else tr.classList.remove('sel');
+}
+
+function moveFocus(tr, colIdx, dir) {
+  const trs = [...document.getElementById('tbody').querySelectorAll('tr')];
+  const idx = trs.indexOf(tr) + dir;
+  if (idx < 0 || idx >= trs.length) return;
+  const inputs = trs[idx].querySelectorAll('input:not([type=checkbox]), select');
+  if (inputs[colIdx]) inputs[colIdx].focus();
+}
+
+function updateUI() {
+  const total = rows.length;
+  const filled = rows.filter(r => r.product && r.qty).length;
+  const sel = rows.filter(r => r._selected).length;
+  document.getElementById('stTotal').textContent = total;
+  document.getElementById('stFilled').textContent = filled;
+  document.getElementById('stSel').textContent = sel;
+  document.getElementById('deleteBtn').disabled = sel === 0;
+  document.getElementById('exportBtn').disabled = total === 0;
+  const cbAll = document.getElementById('cbAll');
+  if (cbAll) cbAll.checked = total > 0 && sel === total;
+}
+
+// ════════════════════════════════════════════════════════
+//  Row management
+// ════════════════════════════════════════════════════════
+function addEmptyRow(data = {}) {
+  const defaults = getDefaults();
+  const row = { _id: _rowId++, _selected: false };
+  COLS.forEach(c => { row[c.k] = ''; });
+  Object.assign(row, defaults, data);
+  rows.push(row);
+  render();
+  setTimeout(() => { const s = document.getElementById('tableScroll'); s.scrollTop = s.scrollHeight; }, 40);
+}
+
+function getDefaults() {
+  return {
+    store:  document.getElementById('d_store').value,
+    no:     document.getElementById('d_no').value,
+    pay_date: document.getElementById('d_paydate').value,
+    sys_id: document.getElementById('d_sysid').value,
+    urgent: document.getElementById('d_urgent').value,
+  };
+}
+
+function applyDefaults() {
+  const def = getDefaults();
+  rows.forEach(r => Object.assign(r, def));
+  render();
+  toast('默认值已应用到全部 ' + rows.length + ' 行', 'ok');
+}
+
+function deleteSelected() {
+  const n = rows.filter(r => r._selected).length;
+  if (!n || !confirm(`删除选中的 ${n} 行？`)) return;
+  rows = rows.filter(r => !r._selected);
+  render();
+  toast(`已删除 ${n} 行`, 'ok');
+}
+
+function toggleAll(v) {
+  rows.forEach(r => r._selected = v);
+  render();
+}
+
+// ════════════════════════════════════════════════════════
+//  File handling & PDF parsing
+// ════════════════════════════════════════════════════════
+function setupDrop() {
+  const zone = document.getElementById('uploadZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('over');
+    const files = [...e.dataTransfer.files].filter(f => f.type === 'application/pdf');
+    if (files.length) handleFiles(files);
+    else toast('请上传 PDF 文件', 'warn');
+  });
+}
+
+async function handleFiles(files) {
+  if (files.length > 20) { files = files.slice(0, 20); toast('最多处理 20 个文件', 'warn'); }
+  const pw = document.getElementById('progressWrap');
+  const pf = document.getElementById('progressFill');
+  const pl = document.getElementById('progressLabel');
+  pw.style.display = 'block';
+
+  let totalAdded = 0;
+  const reports = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    pl.textContent = `解析 ${i+1}/${files.length}: ${file.name}`;
+    pf.style.width = ((i / files.length) * 100) + '%';
+    const el = addFileItem(file.name);
+
+    try {
+      el.classList.add('processing');
+      el.querySelector('.file-status').textContent = '解析中…';
+
+      const raw = await extractText(file);
+
+      // Show preview for first file
+      if (i === 0) {
+        document.getElementById('pdfPreview').textContent = raw.slice(0, 2500) + (raw.length > 2500 ? '\n…[更多内容省略]' : '');
+        document.getElementById('previewCard').style.display = '';
+      }
+
+      // 自动识别：Purchase Order 格式 或 Order Confirmation 格式
+      const isPO = /^Purchase\s+Order\s+\d+/im.test(raw);
+      const parsed = isPO ? parsePurchaseOrder(raw) : parseSombraOrder(raw);
+      const added = parsed.items.length;
+
+      // Apply defaults from sidebar to header
+      const hdr = parsed.header;
+      hdr.store = hdr.store || document.getElementById('d_store').value;
+      hdr.no = hdr.no || document.getElementById('d_no').value;
+
+      parsed.items.forEach(item => rows.push(item));
+      totalAdded += added;
+      reports.push({ name: file.name, so: hdr.order_no, count: added, warnings: parsed.warnings });
+
+      el.classList.remove('processing'); el.classList.add('done');
+      el.querySelector('.file-badge').textContent = 'OK';
+      el.querySelector('.file-badge').style.background = 'var(--green)';
+      el.querySelector('.file-status').textContent = added + ' 行';
+
+    } catch (err) {
+      console.error(err);
+      el.classList.remove('processing'); el.classList.add('error');
+      el.querySelector('.file-badge').textContent = 'ERR';
+      el.querySelector('.file-badge').style.background = 'var(--red)';
+      el.querySelector('.file-status').textContent = '失败';
+      reports.push({ name: file.name, error: err.message });
+      toast(`${file.name} 解析失败`, 'err');
+    }
+  }
+
+  pf.style.width = '100%';
+  pl.textContent = `完成，共添加 ${totalAdded} 行`;
+  setTimeout(() => { pw.style.display = 'none'; }, 3000);
+
+  render();
+  showReport(reports);
+  toast(`成功导入 ${totalAdded} 行数据`, 'ok');
+}
+
+function addFileItem(name) {
+  const list = document.getElementById('fileList');
+  const d = document.createElement('div');
+  d.className = 'file-item';
+  d.innerHTML = `<span class="file-badge">PDF</span><span class="file-name" title="${name}">${name}</span><span class="file-status">等待</span>`;
+  list.appendChild(d);
+  return d;
+}
+
+function showReport(reports) {
+  const card = document.getElementById('reportCard');
+  const el = document.getElementById('parseReport');
+  const badge = document.getElementById('reportBadge');
+  const totalRows = reports.reduce((s, r) => s + (r.count || 0), 0);
+  badge.textContent = totalRows + ' 行';
+  let html = '';
+  for (const r of reports) {
+    if (r.error) {
+      html += `<div class="parse-item-line" style="color:var(--red)">❌ ${r.name}: ${r.error}</div>`;
+    } else {
+      html += `<div class="parse-item-line"><strong>${r.so || '?'}</strong> ${r.name.replace(/\.pdf$/i,'')} — <strong>${r.count}</strong> 行`;
+      if (r.warnings.length) html += ` <span style="color:var(--amber)">(${r.warnings.length} 项跳过)</span>`;
+      html += '</div>';
+      for (const w of r.warnings) {
+        html += `<div class="parse-item-line" style="padding-left:12px; color:var(--amber); font-size:11px;">${w}</div>`;
+      }
+    }
+  }
+  el.innerHTML = html;
+  card.style.display = '';
+}
+
+// ════════════════════════════════════════════════════════
+//  Search
+// ════════════════════════════════════════════════════════
+function onSearch(q) {
+  searchQ = q.toLowerCase().trim();
+  const hint = document.getElementById('filterHint');
+  if (searchQ) {
+    const n = rows.filter(r => [r.product,r.order_no,r.room_no,r.store,r.remark].some(v=>(v||'').toLowerCase().includes(searchQ))).length;
+    hint.style.display = '';
+    hint.textContent = `${n}/${rows.length} 行`;
+  } else {
+    hint.style.display = 'none';
+  }
+  render();
+}
+
+// ════════════════════════════════════════════════════════
+//  Excel Export — 调用服务器端 Python 生成格式化 Excel
+// ════════════════════════════════════════════════════════
+async function exportExcel() {
+  if (!rows.length) return;
+
+  const btn = document.getElementById('exportBtn');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '生成中…';
+
+  // 构造文件名
+  const orders = [...new Set(rows.map(r => r.order_no).filter(Boolean))].join('+');
+  const no     = rows[0]?.no || '';
+  const date   = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const fname  = encodeURIComponent(`${no} ${orders}-${date}.xlsx`.replace(/\s+/g,' ').trim());
+
+  // 清理数据，只保留需要的字段
+  const exportRows = rows.map(r => {
+    const out = {};
+    COLS.forEach(c => { out[c.k] = r[c.k] || ''; });
+    return out;
+  });
+
+  try {
+    const resp = await fetch('/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows: exportRows, filename: fname }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(err || resp.statusText);
+    }
+
+    // 触发下载
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = decodeURIComponent(fname);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast(`已导出 "${decodeURIComponent(fname)}"`, 'ok');
+  } catch (e) {
+    console.error(e);
+    toast('导出失败：' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  Column visibility modal
+// ════════════════════════════════════════════════════════
+function buildColGrid() {
+  const g = document.getElementById('colGrid');
+  g.innerHTML = '';
+  COLS.forEach((c, i) => {
+    const label = document.createElement('label');
+    label.className = 'col-item';
+    label.innerHTML = `<input type="checkbox" data-ci="${i}" ${colVis[i]?'checked':''} class="row-cb"> <span>${c.label}</span>`;
+    g.appendChild(label);
+  });
+}
+function colAll(v) { document.querySelectorAll('#colGrid input').forEach(cb => cb.checked = v); }
+function applyColVis() {
+  document.querySelectorAll('#colGrid input').forEach(cb => { colVis[+cb.dataset.ci] = cb.checked; });
+  buildHeader(); render();
+}
+function openColModal() { buildColGrid(); document.getElementById('colModal').classList.add('open'); }
+function closeColModal() { document.getElementById('colModal').classList.remove('open'); }
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('colModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeColModal(); });
+});
+
+// ════════════════════════════════════════════════════════
+//  Toast
+// ════════════════════════════════════════════════════════
+function toast(msg, type='') {
+  const w = document.getElementById('toastWrap');
+  const d = document.createElement('div');
+  d.className = `toast ${type}`; d.textContent = msg;
+  w.appendChild(d);
+  setTimeout(() => { d.style.transition='opacity .3s'; d.style.opacity='0'; }, 2800);
+  setTimeout(() => d.remove(), 3100);
+}
+</script>
+</body>
+</html>
