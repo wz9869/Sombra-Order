@@ -27,7 +27,6 @@ THIN_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 # 表头填充 & 字体
 HEADER_FILL = PatternFill(fill_type="solid", fgColor=HEADER_BG)
 HEADER_FONT_NORMAL = Font(name=HEADER_FONT, size=FONT_SIZE, color="FFFFFFFF")  # 白色
-HEADER_FONT_REMARK = Font(name=HEADER_FONT, size=FONT_SIZE, bold=True, color="FFFF0000")  # 红色加粗（备注列）
 DATA_FONT_NORMAL   = Font(name=DATA_FONT, size=FONT_SIZE)
 DATA_FONT_WRAP     = Font(name=DATA_FONT, size=FONT_SIZE)
 
@@ -37,65 +36,64 @@ ALIGN_LEFT   = Alignment(horizontal="left",   vertical="center")
 # 数据行对齐（需要换行的列）
 ALIGN_WRAP   = Alignment(vertical="center", wrap_text=True)
 
-# ── 43列定义：[中文表头, 列宽, 表头对齐, 数据wrap] ────────────
+# ── 42列定义：[中文表头, 列宽, 表头对齐, 数据wrap] ────────────
 COLUMNS = [
     # 列号  中文表头                      列宽      表头对齐       数据wrap
-    ("店铺",                            11.43,  ALIGN_CENTER,  False),
-    ("订单号",                           11.12,  ALIGN_CENTER,  False),
-    ("编号",                             6.45,  ALIGN_CENTER,  False),
-    ("产品名称",                          20.52,  ALIGN_CENTER,  False),
-    ("供电方式",                          11.24,  ALIGN_CENTER,  False),
-    ("数量",                              4.38,  ALIGN_CENTER,  False),
-    ("面料型号1(上或前)",                   16.00,  ALIGN_LEFT,    False),
-    ("面料颜色1",                         15.25,  ALIGN_CENTER,  False),
-    ("面料型号2(下或后)",                   14.13,  ALIGN_CENTER,  False),
-    ("面料颜色2",                          9.25,  ALIGN_CENTER,  False),
-    ("遮光率",                            13.88,  ALIGN_CENTER,  False),
+    ("序号",                              4.33,  ALIGN_CENTER,  False),
+    ("店铺",                             17.66,  ALIGN_CENTER,  False),
+    ("订单号",                            15.50,  ALIGN_CENTER,  False),
+    ("产品名称",                          25.33,  ALIGN_CENTER,  False),
+    ("供电方式",                           7.33,  ALIGN_CENTER,  False),
+    ("数量",                             10.16,  ALIGN_LEFT,    False),
+    ("面料型号1(上或前)",                   14.16,  ALIGN_CENTER,  False),
+    ("面料颜色1",                         11.50,  ALIGN_CENTER,  False),
+    ("面料型号2(下或后)",                   14.16,  ALIGN_CENTER,  False),
+    ("面料颜色2",                          8.16,  ALIGN_CENTER,  False),
+    ("遮光率",                             5.83,  ALIGN_CENTER,  False),
     ("内装/外装",                          8.00,  ALIGN_CENTER,  False),
-    ("客户测量尺寸宽度INCH",               18.13,  ALIGN_CENTER,  False),
-    ("客户测量尺寸高度INCH",               18.13,  ALIGN_CENTER,  False),
-    ("客户测量尺寸斜边INCH",               19.54,  ALIGN_CENTER,  False),
-    ("电机选型",                          24.86,  ALIGN_CENTER,  False),
-    ("Hub名称",                           7.38,  ALIGN_CENTER,  False),
-    ("Hub数量",                           7.38,  ALIGN_CENTER,  False),
-    ("罩壳",                             22.00,  ALIGN_CENTER,  False),
-    ("罩壳颜色",                           7.38,  ALIGN_CENTER,  False),
-    ("底梁",                             19.63,  ALIGN_CENTER,  False),
-    ("底梁颜色",                           7.38,  ALIGN_CENTER,  False),
-    ("太阳能板名称",                       15.38,  ALIGN_CENTER,  False),
-    ("太阳能板数量",                       10.38,  ALIGN_CENTER,  False),
-    ("遥控器型号",                         12.13,  ALIGN_CENTER,  False),
-    ("遥控器数量",                          8.88,  ALIGN_CENTER,  False),
-    ("正转反转",                            7.38,  ALIGN_CENTER,  True),
-    ("马达左装右装",                        10.38,  ALIGN_CENTER,  True),
-    ("遮光条",                             8.88,  ALIGN_CENTER,  False),
-    ("延长线",                             5.88,  ALIGN_CENTER,  False),
-    ("延长线数量",                          8.88,  ALIGN_CENTER,  False),
-    ("电源线",                             5.88,  ALIGN_CENTER,  False),
-    ("电源适配器",                          8.88,  ALIGN_CENTER,  False),
-    ("电源适配器数量",                      12.13,  ALIGN_CENTER,  False),
-    ("房间编号",                           16.94,  ALIGN_LEFT,    False),
-    ("包边",                             18.39,  ALIGN_CENTER,  False),
-    ("客户信息",                          26.24,  ALIGN_CENTER,  True),
-    ("备注",                             29.85,  ALIGN_CENTER,  True),   # ← 红色加粗
-    ("付款时间",                          15.94,  ALIGN_LEFT,    False),
-    ("客户邮箱电话",                       10.38,  ALIGN_CENTER,  False),
-    ("系统标识ID",                         9.00,  ALIGN_CENTER,  False),
-    ("是否加急",                            7.38,  ALIGN_CENTER,  False),
-    (None,                               5.00,  ALIGN_CENTER,  False),  # 空列（第43列）
+    ("客户测量尺寸宽度INCH",               18.16,  ALIGN_CENTER,  False),
+    ("客户测量尺寸高度INCH",               18.16,  ALIGN_CENTER,  False),
+    ("客户测量尺寸斜边INCH",               18.16,  ALIGN_CENTER,  False),
+    ("电机选型",                           9.33,  ALIGN_CENTER,  False),
+    ("Hub名称",                            7.33,  ALIGN_CENTER,  False),
+    ("Hub数量",                            7.33,  ALIGN_CENTER,  False),
+    ("罩壳",                              9.83,  ALIGN_CENTER,  False),
+    ("罩壳颜色",                           7.33,  ALIGN_CENTER,  False),
+    ("底梁",                             16.83,  ALIGN_CENTER,  False),
+    ("底梁颜色",                           7.33,  ALIGN_CENTER,  False),
+    ("太阳能板名称",                       15.33,  ALIGN_CENTER,  False),
+    ("太阳能板数量",                       10.33,  ALIGN_CENTER,  False),
+    ("遥控器型号",                         14.16,  ALIGN_CENTER,  False),
+    ("遥控器数量",                          8.83,  ALIGN_CENTER,  False),
+    ("正转反转",                            7.33,  ALIGN_CENTER,  False),
+    ("马达左装右装",                        10.33,  ALIGN_CENTER,  False),
+    ("遮光条",                             5.83,  ALIGN_CENTER,  False),
+    ("延长线",                             5.83,  ALIGN_CENTER,  False),
+    ("延长线数量",                          8.83,  ALIGN_CENTER,  False),
+    ("电源线",                             5.83,  ALIGN_CENTER,  False),
+    ("电源适配器",                         27.66,  ALIGN_CENTER,  False),
+    ("电源适配器数量",                      12.16,  ALIGN_CENTER,  False),
+    ("房间编号",                           21.66,  ALIGN_CENTER,  False),
+    ("特殊工艺",                           17.66,  ALIGN_CENTER,  False),
+    ("备注",                             49.00,  ALIGN_CENTER,  True),
+    ("客户信息",                          47.66,  ALIGN_CENTER,  True),
+    ("付款时间",                           12.50,  ALIGN_CENTER,  False),
+    ("客户邮箱电话",                       10.33,  ALIGN_CENTER,  False),
+    ("系统标识ID",                          9.00,  ALIGN_CENTER,  False),
+    ("是否加急",                            7.33,  ALIGN_CENTER,  False),
 ]
 
 # 数据行中，key与列的对应（顺序与 COLUMNS 一致）
 KEY_ORDER = [
-    "store","order_no","no","product","power","qty",
+    "seq_no","store","order_no","product","power","qty",
     "fabric1","color1","fabric2","color2","blackout","mount",
     "width","height","diagonal","motor","hub_name","hub_qty",
     "cover","cover_color","beam","beam_color",
     "solar_name","solar_qty","remote","remote_qty",
     "rotation","motor_side","shade_strip","ext_wire","ext_wire_qty",
     "power_wire","adapter","adapter_qty",
-    "room_no","edging","customer","remark","pay_date","contact",
-    "sys_id","urgent","__empty",
+    "room_no","edging","remark","customer","pay_date","contact",
+    "sys_id","urgent",
 ]
 
 # 数值类型的字段（存为数字而非字符串）
@@ -114,7 +112,7 @@ def build_excel(rows_data: list) -> bytes:
     for col_idx, (header, col_w, h_align, _wrap) in enumerate(COLUMNS, 1):
         cell = ws.cell(row=1, column=col_idx, value=header)
         cell.fill    = HEADER_FILL
-        cell.font    = HEADER_FONT_REMARK if header == "备注" else HEADER_FONT_NORMAL
+        cell.font    = HEADER_FONT_NORMAL
         cell.alignment = h_align
         cell.border  = THIN_BORDER
         # 列宽
@@ -126,7 +124,11 @@ def build_excel(rows_data: list) -> bytes:
         ws.row_dimensions[row_idx].height = ROW_HEIGHT
         for col_idx, (header, _w, _ha, do_wrap) in enumerate(COLUMNS, 1):
             key = KEY_ORDER[col_idx - 1]
-            raw = row.get(key, "") if key != "__empty" else None
+            # 序号列自动填行号
+            if key == "seq_no":
+                raw = row_idx - 1
+            else:
+                raw = row.get(key, "")
 
             # 类型转换
             value = None
