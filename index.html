@@ -599,16 +599,29 @@ function parsePurchaseOrder(rawText) {
                          : poMatch ? 'PO#' + poMatch[1] : '';
 
   // ── 下单日期 ──
-  const dateMatch = rawText.match(/Date\s+Ordered:\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+  // 兼容两种格式：
+  // 1. "Date Ordered: 05/15/2026"（单行）
+  // 2. "Purchase Order 209 05/15/2026 5:05 PM"（日期在 PO 号同行）
+  const dateMatch = rawText.match(/Date\s+Ordered:\s*(\d{2})\/(\d{2})\/(\d{4})/i)
+                 || rawText.match(/Purchase\s+Order\s+\d+\s+(\d{2})\/(\d{2})\/(\d{4})/i);
   if (dateMatch) {
     result.header.pay_date = `${dateMatch[3]}-${dateMatch[1]}-${dateMatch[2]}`;
   }
 
   // ── 店铺 / 标识（Sidemark） ──
-  const sideMatch = rawText.match(/Sidemark:\s*(.+)/i);
-  result.header.store = sideMatch
-    ? sideMatch[1].trim()
-    : (document.getElementById('d_store').value || 'Customer-B1');
+  // 兼容两种格式：
+  // 1. "Sidemark: BENDER"（值在同一行）
+  // 2. "Fax: Sidemark:\nRMM"（值在下一行）
+  const sideLineMatch = rawText.match(/Sidemark:\s*([^\n\r]+)/i);
+  let store = '';
+  if (sideLineMatch && sideLineMatch[1].trim()) {
+    store = sideLineMatch[1].trim();
+  } else {
+    // 值在下一行
+    const sideNextMatch = rawText.match(/Sidemark:\s*[\r\n]+\s*([^\n\r]+)/i);
+    if (sideNextMatch) store = sideNextMatch[1].trim();
+  }
+  result.header.store = store || document.getElementById('d_store').value || 'Customer-B1';
 
   // ── 其他默认字段 ──
   result.header.no     = document.getElementById('d_no').value    || '241#';
@@ -641,9 +654,16 @@ function parsePurchaseOrder(rawText) {
 
     // 其他固定页眉行
     if (/^Sombra\s+Shades/.test(line)) continue;
-    if (/^Item\s+Qty\s+UM/.test(line)) continue;
+    if (/^Item\s*Qty\s*UM/.test(line)) continue;       // 兼容 "ItemQty UM"（无空格）
     if (/^SUPPLIER:|^SHIP\s+TO:/.test(line)) continue;
     if (/^TOTAL:|^EFFECTIVE\s+DISCOUNT|^DISCOUNTED/.test(line)) continue;
+    if (/^Comments:/i.test(line)) {                    // Comments → 备注
+      if (cur) {
+        const cmtVal = line.replace(/^Comments:\s*/i, '').trim();
+        if (cmtVal) cur.props.remark = (cur.props.remark ? cur.props.remark + ' ' : '') + cmtVal;
+      }
+      continue;
+    }
 
     const m = line.match(itemStartRe);
     if (m) {
@@ -812,13 +832,13 @@ function blockToRows(block, header) {
   if (props.edge_binding === 'NO') edging = '不要包边';
   else if (props.edge_binding === 'YES') edging = '包边';
 
-  // Liner/remark (for woven wood)
-  let remark = '';
+  // Liner/remark (for woven wood) + Comments 字段
+  let remark = props.remark || '';
   if (props.liner === 'YES' && props.liner_color) {
     const lc = props.liner_color.trim();
-    // Extract CC code if present
     const ccMatch = lc.match(/CC-\d+\s+\w+/);
-    remark = ccMatch ? `全遮光衬布型号：${ccMatch[0]}` : `全遮光衬布：${lc}`;
+    const linerStr = ccMatch ? `全遮光衬布型号：${ccMatch[0]}` : `全遮光衬布：${lc}`;
+    remark = remark ? remark + ' ' + linerStr : linerStr;
   }
 
   rows.push(makeRow(header, {
