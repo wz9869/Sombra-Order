@@ -36,12 +36,13 @@ ALIGN_LEFT   = Alignment(horizontal="left",   vertical="center")
 # 数据行对齐（需要换行的列）
 ALIGN_WRAP   = Alignment(vertical="center", wrap_text=True)
 
-# ── 42列定义：[中文表头, 列宽, 表头对齐, 数据wrap] ────────────
+# ── 43列定义：[中文表头, 列宽, 表头对齐, 数据wrap] ────────────
 COLUMNS = [
     # 列号  中文表头                      列宽      表头对齐       数据wrap
     ("序号",                              4.33,  ALIGN_CENTER,  False),
     ("店铺",                             17.66,  ALIGN_CENTER,  False),
     ("订单号",                            15.50,  ALIGN_CENTER,  False),
+    ("编号",                             10.66,  ALIGN_CENTER,  False),
     ("产品名称",                          25.33,  ALIGN_CENTER,  False),
     ("供电方式",                           7.33,  ALIGN_CENTER,  False),
     ("数量",                             10.16,  ALIGN_LEFT,    False),
@@ -74,9 +75,9 @@ COLUMNS = [
     ("电源适配器",                         27.66,  ALIGN_CENTER,  False),
     ("电源适配器数量",                      12.16,  ALIGN_CENTER,  False),
     ("房间编号",                           21.66,  ALIGN_CENTER,  False),
-    ("特殊工艺",                           17.66,  ALIGN_CENTER,  False),
-    ("备注",                             49.00,  ALIGN_CENTER,  True),
-    ("客户信息",                          47.66,  ALIGN_CENTER,  True),
+    ("包边",                             17.66,  ALIGN_CENTER,  False),
+    ("客户信息",                          38.66,  ALIGN_CENTER,  True),
+    ("备注",                             40.66,  ALIGN_CENTER,  True),
     ("付款时间",                           12.50,  ALIGN_CENTER,  False),
     ("客户邮箱电话",                       10.33,  ALIGN_CENTER,  False),
     ("系统标识ID",                          9.00,  ALIGN_CENTER,  False),
@@ -85,14 +86,14 @@ COLUMNS = [
 
 # 数据行中，key与列的对应（顺序与 COLUMNS 一致）
 KEY_ORDER = [
-    "seq_no","store","order_no","product","power","qty",
+    "seq_no","store","order_no","no","product","power","qty",
     "fabric1","color1","fabric2","color2","blackout","mount",
     "width","height","diagonal","motor","hub_name","hub_qty",
     "cover","cover_color","beam","beam_color",
     "solar_name","solar_qty","remote","remote_qty",
     "rotation","motor_side","shade_strip","ext_wire","ext_wire_qty",
     "power_wire","adapter","adapter_qty",
-    "room_no","edging","remark","customer","pay_date","contact",
+    "room_no","edging","customer","remark","pay_date","contact",
     "sys_id","urgent",
 ]
 
