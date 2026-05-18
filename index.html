@@ -608,20 +608,8 @@ function parsePurchaseOrder(rawText) {
     result.header.pay_date = `${dateMatch[3]}-${dateMatch[1]}-${dateMatch[2]}`;
   }
 
-  // ── 店铺 / 标识（Sidemark） ──
-  // 兼容两种格式：
-  // 1. "Sidemark: BENDER"（值在同一行）
-  // 2. "Fax: Sidemark:\nRMM"（值在下一行）
-  const sideLineMatch = rawText.match(/Sidemark:\s*([^\n\r]+)/i);
-  let store = '';
-  if (sideLineMatch && sideLineMatch[1].trim()) {
-    store = sideLineMatch[1].trim();
-  } else {
-    // 值在下一行
-    const sideNextMatch = rawText.match(/Sidemark:\s*[\r\n]+\s*([^\n\r]+)/i);
-    if (sideNextMatch) store = sideNextMatch[1].trim();
-  }
-  result.header.store = store || document.getElementById('d_store').value || 'Customer-B1';
+  // ── 店铺：始终使用侧边栏默认值 ──
+  result.header.store = document.getElementById('d_store').value || 'Customer-B1';
 
   // ── 其他默认字段 ──
   result.header.no     = document.getElementById('d_no').value    || '241#';
